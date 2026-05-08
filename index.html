@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <title>Ishu Group Chat</title>
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+  >
+
+  <style>
+
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      font-family:Arial;
+    }
+
+    body{
+      background:#0f0f0f;
+      height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    .app{
+      width:100%;
+      max-width:420px;
+      height:100vh;
+      background:#141414;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .top{
+      padding:15px;
+      background:#1f1f1f;
+      border-bottom:1px solid #333;
+      text-align:center;
+    }
+
+    .logo{
+      width:80px;
+      height:80px;
+      border-radius:50%;
+      border:3px solid #00cec9;
+      margin-bottom:10px;
+      box-shadow:0 0 20px #00cec9;
+    }
+
+    .title{
+      color:white;
+      font-size:22px;
+      font-weight:bold;
+      margin-bottom:12px;
+    }
+
+    input{
+      width:100%;
+      padding:12px;
+      margin-top:8px;
+      border:none;
+      border-radius:10px;
+      background:#2a2a2a;
+      color:white;
+      outline:none;
+      font-size:15px;
+    }
+
+    .joinBtn{
+      width:100%;
+      padding:12px;
+      margin-top:10px;
+      border:none;
+      border-radius:10px;
+      background:linear-gradient(
+        45deg,
+        #00b894,
+        #0984e3
+      );
+      color:white;
+      font-size:16px;
+      font-weight:bold;
+      cursor:pointer;
+    }
+
+    #chat{
+      flex:1;
+      overflow:auto;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      background:#111;
+    }
+
+    .msg{
+      background:#1f1f1f;
+      color:white;
+      padding:12px;
+      border-radius:14px;
+      max-width:85%;
+      animation:show .25s ease;
+      box-shadow:0 0 10px rgba(0,0,0,.3);
+      transition:.3s;
+    }
+
+    .msg:hover{
+      transform:scale(1.02);
+    }
+
+    .name{
+      color:#00cec9;
+      font-size:14px;
+      font-weight:bold;
+      margin-bottom:5px;
+    }
+
+    .time{
+      font-size:11px;
+      opacity:.6;
+      margin-top:6px;
+    }
+
+    .bottom{
+      padding:12px;
+      background:#1a1a1a;
+      border-top:1px solid #333;
+    }
+
+    .sendRow{
+      display:flex;
+      gap:10px;
+    }
+
+    .sendRow input{
+      flex:1;
+      margin-top:0;
+    }
+
+    .sendBtn{
+      width:60px;
+      border:none;
+      border-radius:12px;
+      background:#0984e3;
+      color:white;
+      font-size:18px;
+      cursor:pointer;
+    }
+
+    @keyframes show{
+
+      from{
+        opacity:0;
+        transform:
+          translateY(20px)
+          scale(.9);
+      }
+
+      to{
+        opacity:1;
+        transform:
+          translateY(0)
+          scale(1);
+      }
+
+    }
+
+  </style>
+
+</head>
+<body>
+
+<div class="app">
+
+  <div class="top">
+
+    <img
+      class="logo"
+      src="ChatGPT Image May 8, 2026, 10_04_00 PM.png"
+    >
+
+    <div class="title">
+      🔥 Ishu Group Chat
+    </div>
+
+    <input
+      id="name"
+      placeholder="Your Name"
+    >
+
+    <input
+      id="group"
+      placeholder="Group ID"
+    >
+
+    <button
+      class="joinBtn"
+      onclick="joinGroup()"
+    >
+      <i class="fa-solid fa-users"></i>
+      Join Group
+    </button>
+
+  </div>
+
+  <div id="chat"></div>
+
+  <div class="bottom">
+
+    <div class="sendRow">
+
+      <input
+        id="message"
+        placeholder="Type message"
+      >
+
+      <button
+        class="sendBtn"
+        onclick="send()"
+      >
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+
+const socket = io();
+
+let currentGroup = "";
+
+// JOIN
+function joinGroup(){
+
+  const group =
+    document.getElementById("group")
+    .value
+    .trim();
+
+  if(!group){
+
+    alert("Enter Group ID");
+
+    return;
+  }
+
+  currentGroup = group;
+
+  socket.emit(
+    "join_group",
+    group
+  );
+}
+
+// SEND
+function send(){
+
+  const name =
+    document.getElementById("name")
+    .value
+    .trim();
+
+  const message =
+    document.getElementById("message")
+    .value
+    .trim();
+
+  if(!name || !message){
+
+      return;
+  }
+
+  if(!currentGroup){
+
+    alert("Join Group First");
+
+    return;
+  }
+
+  socket.emit("send_message", {
+
+    name:name,
+    message:message,
+    group:currentGroup
+
+  });
+
+  document.getElementById("message")
+    .value = "";
+}
+
+// RECEIVE
+socket.on(
+  "receive_message",
+  (data)=>{
+
+    addMessage(data);
+
+  }
+);
+
+// LOAD
+socket.on(
+  "load_messages",
+  (msgs)=>{
+
+    const chat =
+      document.getElementById("chat");
+
+    chat.innerHTML = "";
+
+    msgs.forEach(addMessage);
+
+  }
+);
+
+// ADD MESSAGE
+function addMessage(data){
+
+  const chat =
+    document.getElementById("chat");
+
+  const div =
+    document.createElement("div");
+
+  div.className = "msg";
+
+  const date =
+    new Date(data.time);
+
+  const timeString =
+    date.toLocaleTimeString();
+
+  div.innerHTML = `
+
+    <div class="name">
+      ${data.name}
+    </div>
+
+    <div>
+      ${data.message}
+    </div>
+
+    <div class="time">
+      ${timeString}
+    </div>
+
+  `;
+
+  chat.appendChild(div);
+
+  chat.scrollTop =
+    chat.scrollHeight;
+}
+
+</script>
+
+</body>
+</html>
