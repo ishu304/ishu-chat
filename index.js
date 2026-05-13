@@ -1,3 +1,5 @@
+// index.js
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -22,26 +24,59 @@ const io = new Server(server, {
   }
 });
 
-// STORE GROUP MESSAGES
+// STORE
 let groupMessages = {};
+let onlineUsers = {};
 
 io.on("connection", (socket)=>{
 
   console.log("🔥 User Connected");
 
   // JOIN GROUP
-  socket.on("join_group", (groupId)=>{
+  socket.on("join_group", (data)=>{
+
+    const groupId = data.group;
+    const userName = data.name;
 
     socket.join(groupId);
 
-    if(groupMessages[groupId]){
+    socket.groupId = groupId;
+    socket.userName = userName;
 
-      socket.emit(
-        "load_messages",
-        groupMessages[groupId]
-      );
+    // CREATE GROUP
+    if(!groupMessages[groupId]){
+
+      groupMessages[groupId] = [];
 
     }
+
+    // CREATE ONLINE LIST
+    if(!onlineUsers[groupId]){
+
+      onlineUsers[groupId] = [];
+
+    }
+
+    // ADD USER
+    onlineUsers[groupId].push(userName);
+
+    // REMOVE DUPLICATE
+    onlineUsers[groupId] =
+      [...new Set(
+        onlineUsers[groupId]
+      )];
+
+    // SEND ONLINE USERS
+    io.to(groupId).emit(
+      "online_users",
+      onlineUsers[groupId]
+    );
+
+    // SEND OLD CHAT
+    io.to(groupId).emit(
+      "load_messages",
+      groupMessages[groupId]
+    );
 
   });
 
@@ -62,28 +97,51 @@ io.on("connection", (socket)=>{
 
     };
 
-    // CREATE GROUP
     if(!groupMessages[data.group]){
 
       groupMessages[data.group] = [];
 
     }
 
-    // SAVE
     groupMessages[data.group]
       .push(msg);
 
-    // SEND TO GROUP
     io.to(data.group).emit(
-      "receive_message",
-      msg
+      "load_messages",
+      groupMessages[data.group]
     );
+
+  });
+
+  // DISCONNECT
+  socket.on("disconnect", ()=>{
+
+    const groupId = socket.groupId;
+    const userName = socket.userName;
+
+    if(
+      groupId &&
+      onlineUsers[groupId]
+    ){
+
+      onlineUsers[groupId] =
+        onlineUsers[groupId]
+        .filter(
+          user => user !== userName
+        );
+
+      io.to(groupId).emit(
+        "online_users",
+        onlineUsers[groupId]
+      );
+
+    }
 
   });
 
 });
 
-// 🔥 AUTO DELETE AFTER 1 MIN
+// AUTO DELETE 2 MIN
 setInterval(()=>{
 
   const now = Date.now();
@@ -91,11 +149,12 @@ setInterval(()=>{
   for(const group in groupMessages){
 
     groupMessages[group] =
-      groupMessages[group].filter(msg => {
+      groupMessages[group]
+      .filter(msg => {
 
         return (
           now - msg.time
-        ) < 60000;
+        ) < 120000;
 
       });
 
@@ -106,7 +165,7 @@ setInterval(()=>{
 
   }
 
-}, 1000);
+},1000);
 
 // ROOT
 app.get("/", (req,res)=>{
@@ -120,11 +179,9 @@ app.get("/", (req,res)=>{
 
 });
 
-// PORT
 const PORT =
   process.env.PORT || 3001;
 
-// START
 server.listen(PORT, ()=>{
 
   console.log(
